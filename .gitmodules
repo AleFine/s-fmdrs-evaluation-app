@@ -1,0 +1,7 @@
+[submodule "app-backend"]
+	path = app-backend
+	url = https://github.com/PollitoJLGD123/service-FMDRS
+
+[submodule "app-frontend"]
+	path = app-frontend
+	url = https://github.com/AleFine/app-frontend
