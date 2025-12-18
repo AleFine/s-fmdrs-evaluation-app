@@ -9,10 +9,9 @@ Implementar el backend completo para el sistema S-FMDRS (Simplified Functional M
 ### Stack Tecnológico Backend
 - **Framework**: Node.js con NestJS
 - **Base de Datos**: PostgreSQL 15+
-- **ORM**: TypeORM o Prisma
+- **ORM**: Sequelize
 - **Autenticación**: JWT (JSON Web Tokens)
 - **Validación**: class-validator + class-transformer
-- **Documentación API**: Swagger/OpenAPI
 - **Contenedorización**: Docker + Docker Compose
 - **Variables de Entorno**: dotenv
 - **Integración IA**: 
@@ -89,12 +88,12 @@ Implementar el backend completo para el sistema S-FMDRS (Simplified Functional M
 
 ```sql
 -- Extensiones
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "int-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Tabla: usuarios
 CREATE TABLE usuarios (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id SERIAL PRIMARY KEY NOT NULL,
   nombres VARCHAR(100) NOT NULL,
   apellidos VARCHAR(100) NOT NULL,
   dni VARCHAR(8) UNIQUE NOT NULL,
@@ -115,10 +114,10 @@ CREATE INDEX idx_usuarios_rol ON usuarios(rol);
 
 -- Tabla: tratamientos
 CREATE TABLE tratamientos (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id SERIAL PRIMARY KEY NOT NULL,
   numero INTEGER NOT NULL,
-  paciente_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  medico_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  paciente_id int NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  medico_id int NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   estado VARCHAR(20) NOT NULL DEFAULT 'ACTIVO' CHECK (estado IN ('ACTIVO', 'TERMINADO', 'CANCELADO')),
   nombre VARCHAR(255),
   objetivo TEXT,
@@ -138,8 +137,8 @@ CREATE INDEX idx_tratamientos_estado ON tratamientos(estado);
 
 -- Tabla: cuestionarios
 CREATE TABLE cuestionarios (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tratamiento_id UUID NOT NULL REFERENCES tratamientos(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY NOT NULL,
+  tratamiento_id int NOT NULL REFERENCES tratamientos(id) ON DELETE CASCADE,
   numero INTEGER NOT NULL,
   fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   tipo VARCHAR(20) NOT NULL CHECK (tipo IN ('INICIAL', 'SEGUIMIENTO', 'FINAL')),
@@ -157,8 +156,8 @@ CREATE INDEX idx_cuestionarios_fecha ON cuestionarios(fecha);
 
 -- Tabla: respuestas_region
 CREATE TABLE respuestas_region (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  cuestionario_id UUID NOT NULL REFERENCES cuestionarios(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY NOT NULL,
+  cuestionario_id int NOT NULL REFERENCES cuestionarios(id) ON DELETE CASCADE,
   region_id VARCHAR(50) NOT NULL,
   nombre_region VARCHAR(100) NOT NULL,
   severidad INTEGER NOT NULL CHECK (severidad >= 0 AND severidad <= 3),
@@ -173,8 +172,8 @@ CREATE INDEX idx_respuestas_cuestionario ON respuestas_region(cuestionario_id);
 
 -- Tabla: analisis_ia
 CREATE TABLE analisis_ia (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  cuestionario_id UUID NOT NULL REFERENCES cuestionarios(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY NOT NULL,
+  cuestionario_id int NOT NULL REFERENCES cuestionarios(id) ON DELETE CASCADE,
   modelo VARCHAR(20) NOT NULL CHECK (modelo IN ('claude', 'gemini')),
   contenido TEXT NOT NULL,
   timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -185,9 +184,9 @@ CREATE TABLE analisis_ia (
 
 -- Tabla: comentarios
 CREATE TABLE comentarios (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  cuestionario_id UUID NOT NULL REFERENCES cuestionarios(id) ON DELETE CASCADE,
-  medico_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY NOT NULL,
+  cuestionario_id int NOT NULL REFERENCES cuestionarios(id) ON DELETE CASCADE,
+  medico_id int NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   contenido TEXT NOT NULL,
   timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -197,8 +196,8 @@ CREATE TABLE comentarios (
 
 -- Tabla: password_resets (para recuperación de contraseña)
 CREATE TABLE password_resets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  usuario_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  id SERIAL PRIMARY KEY NOT NULL,
+  usuario_id int NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
   token VARCHAR(255) NOT NULL UNIQUE,
   expires_at TIMESTAMP NOT NULL,
   usado BOOLEAN DEFAULT FALSE,
@@ -233,7 +232,6 @@ CREATE TRIGGER update_cuestionarios_updated_at BEFORE UPDATE ON cuestionarios
 -- Insertar administrador
 INSERT INTO usuarios (id, nombres, apellidos, dni, email, password, rol)
 VALUES (
-  '00000000-0000-0000-0000-000000000001',
   'Carlos Alberto',
   'Mendoza Silva',
   '12345678',
@@ -246,7 +244,6 @@ VALUES (
 INSERT INTO usuarios (id, nombres, apellidos, dni, email, password, rol, especialidad)
 VALUES 
 (
-  '10000000-0000-0000-0000-000000000001',
   'María Elena',
   'García López',
   '23456789',
@@ -256,7 +253,6 @@ VALUES
   'Neurología'
 ),
 (
-  '10000000-0000-0000-0000-000000000002',
   'Roberto Carlos',
   'Fernández Torres',
   '34567890',
@@ -270,7 +266,6 @@ VALUES
 INSERT INTO usuarios (id, nombres, apellidos, dni, email, password, rol, edad, sexo)
 VALUES 
 (
-  '20000000-0000-0000-0000-000000000001',
   'Juan José',
   'Pérez Rodríguez',
   '45678901',
@@ -281,7 +276,6 @@ VALUES
   'M'
 ),
 (
-  '20000000-0000-0000-0000-000000000002',
   'Ana María',
   'González Sánchez',
   '56789012',
@@ -292,7 +286,6 @@ VALUES
   'F'
 ),
 (
-  '20000000-0000-0000-0000-000000000003',
   'Luis Alberto',
   'Martínez Ruiz',
   '67890123',
@@ -303,7 +296,6 @@ VALUES
   'M'
 ),
 (
-  '20000000-0000-0000-0000-000000000004',
   'Carmen Rosa',
   'López Díaz',
   '78901234',
@@ -340,65 +332,9 @@ backend/
 │   │   │   └── transform.interceptor.ts
 │   │   └── pipes/
 │   │       └── validation.pipe.ts
-│   ├── auth/
-│   │   ├── auth.module.ts
-│   │   ├── auth.controller.ts
-│   │   ├── auth.service.ts
-│   │   ├── strategies/
-│   │   │   └── jwt.strategy.ts
-│   │   └── dto/
-│   │       ├── login.dto.ts
-│   │       └── change-password.dto.ts
-│   ├── usuarios/
-│   │   ├── usuarios.module.ts
-│   │   ├── usuarios.controller.ts
-│   │   ├── usuarios.service.ts
-│   │   ├── entities/
-│   │   │   └── usuario.entity.ts
-│   │   └── dto/
-│   │       ├── create-usuario.dto.ts
-│   │       └── update-usuario.dto.ts
-│   ├── tratamientos/
-│   │   ├── tratamientos.module.ts
-│   │   ├── tratamientos.controller.ts
-│   │   ├── tratamientos.service.ts
-│   │   ├── entities/
-│   │   │   └── tratamiento.entity.ts
-│   │   └── dto/
-│   │       ├── create-tratamiento.dto.ts
-│   │       └── update-tratamiento.dto.ts
-│   ├── cuestionarios/
-│   │   ├── cuestionarios.module.ts
-│   │   ├── cuestionarios.controller.ts
-│   │   ├── cuestionarios.service.ts
-│   │   ├── entities/
-│   │   │   ├── cuestionario.entity.ts
-│   │   │   ├── respuesta-region.entity.ts
-│   │   │   ├── analisis-ia.entity.ts
-│   │   │   └── comentario.entity.ts
-│   │   └── dto/
-│   │       ├── create-cuestionario.dto.ts
-│   │       ├── create-respuesta.dto.ts
-│   │       ├── generate-analisis.dto.ts
-│   │       └── create-comentario.dto.ts
-│   ├── ia/
-│   │   ├── ia.module.ts
-│   │   ├── ia.service.ts
-│   │   ├── providers/
-│   │   │   ├── claude.provider.ts
-│   │   │   └── gemini.provider.ts
-│   │   └── templates/
-│   │       └── analisis-clinico.template.ts
-│   ├── analytics/
-│   │   ├── analytics.module.ts
-│   │   ├── analytics.controller.ts
-│   │   └── analytics.service.ts
-│   ├── email/
-│   │   ├── email.module.ts
-│   │   └── email.service.ts
-│   └── config/
-│       ├── database.config.ts
-│       └── jwt.config.ts
+│   |___modules/ (aca van todos los modulos, ya los tengo creados, solo necesito que los revises)
+
+
 ├── test/
 ├── docker/
 │   ├── Dockerfile
@@ -418,21 +354,23 @@ backend/
 
 ### 1. Autenticación (`/api/auth`)
 
+La autenticacion sera con una cookie creada en el backend con el modulo de cookie de express.
+Ejemplo: res.cookie(token, {
+  httpOnly: true
+}) Es un ejemplo de uso y creacion, necesito que lo mejores.
+
 ```typescript
 POST   /api/auth/login
 Body: { email: string, password: string }
-Response: { access_token: string, user: UserDto, expires_in: number }
+(Despues de enviar la cookie al frontend se enviara la información del usuario)
+Response: { user: UserDto, expires_in: number }
 
 POST   /api/auth/logout
-Headers: Authorization: Bearer {token}
+Headers: Cookie: token
 Response: { message: string }
 
-POST   /api/auth/refresh
-Body: { refresh_token: string }
-Response: { access_token: string, expires_in: number }
-
 GET    /api/auth/me
-Headers: Authorization: Bearer {token}
+Headers: Cookie: token
 Response: UserDto
 ```
 
@@ -441,34 +379,28 @@ Response: UserDto
 ```typescript
 GET    /api/usuarios
 Query: ?rol=MEDICO&activo=true
-Headers: Authorization: Bearer {token}
 Roles: ADMINISTRADOR
 Response: Usuario[]
 
 GET    /api/usuarios/:id
-Headers: Authorization: Bearer {token}
 Roles: ADMINISTRADOR, MEDICO (solo sus pacientes)
 Response: Usuario
 
 POST   /api/usuarios
 Body: CreateUsuarioDto
-Headers: Authorization: Bearer {token}
 Roles: ADMINISTRADOR
 Response: { usuario: Usuario, password: string }
 
 PATCH  /api/usuarios/:id
 Body: UpdateUsuarioDto
-Headers: Authorization: Bearer {token}
 Roles: ADMINISTRADOR
 Response: Usuario
 
 DELETE /api/usuarios/:id
-Headers: Authorization: Bearer {token}
 Roles: ADMINISTRADOR
 Response: { message: string }
 
 POST   /api/usuarios/:id/desactivar
-Headers: Authorization: Bearer {token}
 Roles: ADMINISTRADOR
 Response: Usuario
 ```
@@ -477,13 +409,11 @@ Response: Usuario
 
 ```typescript
 GET    /api/tratamientos
-Query: ?pacienteId={uuid}&medicoId={uuid}&estado=ACTIVO
-Headers: Authorization: Bearer {token}
+Query: ?pacienteId={int}&medicoId={int}&estado=ACTIVO
 Roles: MEDICO, PACIENTE (filtrado automático según rol)
 Response: Tratamiento[]
 
 GET    /api/tratamientos/:id
-Headers: Authorization: Bearer {token}
 Roles: MEDICO (creador), PACIENTE (si es suyo)
 Response: Tratamiento (con cuestionarios anidados)
 
@@ -495,24 +425,20 @@ Body: CreateTratamientoDto {
   metaObjetivo?: number,
   metaDescripcion?: string
 }
-Headers: Authorization: Bearer {token}
 Roles: MEDICO
 Response: Tratamiento
 
 PATCH  /api/tratamientos/:id
 Body: UpdateTratamientoDto
-Headers: Authorization: Bearer {token}
 Roles: MEDICO (creador)
 Response: Tratamiento
 
 PATCH  /api/tratamientos/:id/estado
 Body: { estado: 'TERMINADO' | 'CANCELADO' }
-Headers: Authorization: Bearer {token}
 Roles: MEDICO (creador)
 Response: Tratamiento
 
 GET    /api/tratamientos/:id/progreso
-Headers: Authorization: Bearer {token}
 Roles: MEDICO (creador), PACIENTE (si es suyo)
 Response: {
   evaluacionInicial: Cuestionario,
@@ -530,13 +456,11 @@ Response: {
 
 ```typescript
 GET    /api/cuestionarios
-Query: ?tratamientoId={uuid}
-Headers: Authorization: Bearer {token}
+Query: ?tratamientoId={int}
 Roles: MEDICO, PACIENTE (con filtrado)
 Response: Cuestionario[]
 
 GET    /api/cuestionarios/:id
-Headers: Authorization: Bearer {token}
 Roles: MEDICO, PACIENTE (con filtrado)
 Response: Cuestionario (con respuestas, análisis IA y comentarios)
 
@@ -548,25 +472,16 @@ Body: CreateCuestionarioDto {
   respuestas: RespuestaRegionDto[],
   observacionesGenerales?: string
 }
-Headers: Authorization: Bearer {token}
 Roles: MEDICO
 Response: Cuestionario
 
-POST   /api/cuestionarios/:id/analisis-ia
-Body: { modelo: 'claude' | 'gemini' }
-Headers: Authorization: Bearer {token}
-Roles: MEDICO
-Response: AnalisisIA
-
 POST   /api/cuestionarios/:id/comentario
 Body: { contenido: string }
-Headers: Authorization: Bearer {token}
 Roles: MEDICO
 Response: Comentario
 
 GET    /api/cuestionarios/:id/comparacion
 Query: ?comparadoCon={cuestionarioId}
-Headers: Authorization: Bearer {token}
 Roles: MEDICO, PACIENTE
 Response: {
   anterior: Cuestionario,
@@ -580,7 +495,7 @@ Response: {
 
 ```typescript
 GET    /api/analytics/dashboard
-Headers: Authorization: Bearer {token}
+ 
 Roles: MEDICO
 Response: {
   puntajePromedio: number,
@@ -595,7 +510,7 @@ Response: {
 }
 
 GET    /api/analytics/paciente/:pacienteId
-Headers: Authorization: Bearer {token}
+ 
 Roles: MEDICO
 Response: {
   historialCompleto: Cuestionario[],
@@ -682,11 +597,6 @@ services:
       - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
     networks:
       - sfmdrs-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sfmdrs}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # Backend API (NestJS)
   backend:
@@ -702,7 +612,7 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: ${PORT:-3000}
       DB_HOST: postgres
-      DB_PORT: 5432
+      DB_PORT: 4000
       DB_NAME: ${DB_NAME:-sfmdrs}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
@@ -721,12 +631,6 @@ services:
       - sfmdrs-network
     volumes:
       - ./logs:/app/logs
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   # (Opcional) Nginx como Reverse Proxy
   nginx:
@@ -794,819 +698,17 @@ CORS_ORIGIN=*
 # Logging
 LOG_LEVEL=debug
 
-# Rate Limiting
-RATE_LIMIT_TTL=60
-RATE_LIMIT_MAX=100
 ```
 
 ---
 
-## IMPLEMENTACIÓN DE ENTIDADES (TypeORM)
+## IMPLEMENTACIÓN DE ENTIDADES CON ORM SEQUELIZE
 
-### Usuario Entity
+## IMPLEMENTAR SERVICIOS CON CONTROLADORES; MODULOS para cada submodulo creado recientemente
 
-```typescript
-// src/usuarios/entities/usuario.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { Exclude } from 'class-transformer';
-import { Tratamiento } from '../../tratamientos/entities/tratamiento.entity';
+## DEJAR LISTO TODO PARA EXPOSICION DE ENDPOINTS
 
-export enum RolUsuario {
-  ADMINISTRADOR = 'ADMINISTRADOR',
-  MEDICO = 'MEDICO',
-  PACIENTE = 'PACIENTE'
-}
-
-@Entity('usuarios')
-export class Usuario {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column({ length: 100 })
-  nombres: string;
-
-  @Column({ length: 100 })
-  apellidos: string;
-
-  @Column({ length: 8, unique: true })
-  dni: string;
-
-  @Column({ length: 255, unique: true })
-  email: string;
-
-  @Exclude()
-  @Column({ length: 255 })
-  password: string;
-
-  @Column({
-    type: 'enum',
-    enum: RolUsuario
-  })
-  rol: RolUsuario;
-
-  @Column({ type: 'int', nullable: true })
-  edad?: number;
-
-  @Column({ type: 'char', length: 1, nullable: true })
-  sexo?: 'M' | 'F';
-
-  @Column({ length: 100, nullable: true })
-  especialidad?: string;
-
-  @Column({ default: true })
-  activo: boolean;
-
-  @OneToMany(() => Tratamiento, tratamiento => tratamiento.paciente)
-  tratamientosComoPaciente: Tratamiento[];
-
-  @OneToMany(() => Tratamiento, tratamiento => tratamiento.medico)
-  tratamientosComoMedico: Tratamiento[];
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
-  // Helper methods
-  get nombreCompleto(): string {
-    return `${this.nombres} ${this.apellidos}`;
-  }
-
-  esMedico(): boolean {
-    return this.rol === RolUsuario.MEDICO;
-  }
-
-  esPaciente(): boolean {
-    return this.rol === RolUsuario.PACIENTE;
-  }
-
-  esAdministrador(): boolean {
-    return this.rol === RolUsuario.ADMINISTRADOR;
-  }
-}
 ```
-
-### Tratamiento Entity
-
-```typescript
-// src/tratamientos/entities/tratamiento.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
-import { Usuario } from '../../usuarios/entities/usuario.entity';
-import { Cuestionario } from '../../cuestionarios/entities/cuestionario.entity';
-
-export enum EstadoTratamiento {
-  ACTIVO = 'ACTIVO',
-  TERMINADO = 'TERMINADO',
-  CANCELADO = 'CANCELADO'
-}
-
-@Entity('tratamientos')
-export class Tratamiento {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column({ type: 'int' })
-  numero: number;
-
-  @ManyToOne(() => Usuario, usuario => usuario.tratamientosComoPaciente, { eager: true })
-  @JoinColumn({ name: 'paciente_id' })
-  paciente: Usuario;
-
-  @Column({ name: 'paciente_id' })
-  pacienteId: string;
-
-  @ManyToOne(() => Usuario, usuario => usuario.tratamientosComoMedico, { eager: true })
-  @JoinColumn({ name: 'medico_id' })
-  medico: Usuario;
-
-  @Column({ name: 'medico_id' })
-  medicoId: string;
-
-  @Column({
-    type: 'enum',
-    enum: EstadoTratamiento,
-    default: EstadoTratamiento.ACTIVO
-  })
-  estado: EstadoTratamiento;
-
-  @Column({ length: 255, nullable: true })
-  nombre?: string;
-
-  @Column({ type: 'text', nullable: true })
-  objetivo?: string;
-
-  @Column({ name: 'fecha_inicio', type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  fechaInicio: Date;
-
-  @Column({ name: 'fecha_fin', type: 'timestamp', nullable: true })
-  fechaFin?: Date;
-
-  @Column({ name: 'meta_objetivo', type: 'int', nullable: true })
-  metaObjetivo?: number;
-
-  @Column({ name: 'meta_descripcion', type: 'text', nullable: true })
-  metaDescripcion?: string;
-
-  @OneToMany(() => Cuestionario, cuestionario => cuestionario.tratamiento)
-  cuestionarios: Cuestionario[];
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
-  // Helper methods
-  estaActivo(): boolean {
-    return this.estado === EstadoTratamiento.ACTIVO;
-  }
-
-  puedeSerModificado(): boolean {
-    return this.estado !== EstadoTratamiento.CANCELADO;
-  }
-}
-```
-
-### Cuestionario Entity
-
-```typescript
-// src/cuestionarios/entities/cuestionario.entity.ts
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany, OneToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
-import { Tratamiento } from '../../tratamientos/entities/tratamiento.entity';
-import { RespuestaRegion } from './respuesta-region.entity';
-import { AnalisisIA } from './analisis-ia.entity';
-import { Comentario } from './comentario.entity';
-
-export enum TipoCuestionario {
-  INICIAL = 'INICIAL',
-  SEGUIMIENTO = 'SEGUIMIENTO',
-  FINAL = 'FINAL'
-}
-
-@Entity('cuestionarios')
-export class Cuestionario {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @ManyToOne(() => Tratamiento, tratamiento => tratamiento.cuestionarios)
-  @JoinColumn({ name: 'tratamiento_id' })
-  tratamiento: Tratamiento;
-
-  @Column({ name: 'tratamiento_id' })
-  tratamientoId: string;
-
-  @Column({ type: 'int' })
-  numero: number;
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  fecha: Date;
-
-  @Column({
-    type: 'enum',
-    enum: TipoCuestionario
-  })
-  tipo: TipoCuestionario;
-
-  @Column({ name: 'puntaje_total', type: 'int' })
-  puntajeTotal: number;
-
-  @Column({ name: 'tiempo_protocolo', type: 'int', nullable: true })
-  tiempoProtocolo?: number;
-
-  @Column({ name: 'observaciones_generales', type: 'text', nullable: true })
-  observacionesGenerales?: string;
-
-  @OneToMany(() => RespuestaRegion, respuesta => respuesta.cuestionario, { cascade: true })
-  respuestas: RespuestaRegion[];
-
-  @OneToOne(() => AnalisisIA, analisis => analisis.cuestionario, { cascade: true })
-  analisisIA?: AnalisisIA;
-
-  @OneToOne(() => Comentario, comentario => comentario.cuestionario, { cascade: true })
-  comentario?: Comentario;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
-  // Helper methods
-  calcularPuntajeTotal(): number {
-    return this.respuestas.reduce((sum, r) => sum + r.total, 0);
-  }
-
-  getSeveridadCategoria(): string {
-    const porcentaje = (this.puntajeTotal / 54) * 100;
-    if (porcentaje <= 33) return 'LEVE';
-    if (porcentaje <= 66) return 'MODERADO';
-    return 'SEVERO';
-  }
-}
-```
-
----
-
-## SERVICIO DE INTEGRACIÓN CON IA
-
-### Claude Provider
-
-```typescript
-// src/ia/providers/claude.provider.ts
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
-import { Cuestionario } from '../../cuestionarios/entities/cuestionario.entity';
-import { generarPromptAnalisisContinuar0:39nico } from '../templates/analisis-clinico.template';
-
-@Injectable()
-export class ClaudeProvider {
-  private client: Anthropic;
-
-  constructor(private configService: ConfigService) {
-    this.client = new Anthropic({
-      apiKey: this.configService.get<string>('CLAUDE_API_KEY'),
-    });
-  }
-
-  async generarAnalisis(
-    cuestionario: Cuestionario,
-    cuestionarioAnterior?: Cuestionario
-  ): Promise<string> {
-    const prompt = generarPromptAnalisisClinico(cuestionario, cuestionarioAnterior);
-
-    const message = await this.client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      temperature: 0.7,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    });
-
-    return message.content[0].type === 'text' 
-      ? message.content[0].text 
-      : '';
-  }
-}
-```
-
-### Gemini Provider
-
-```typescript
-// src/ia/providers/gemini.provider.ts
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Cuestionario } from '../../cuestionarios/entities/cuestionario.entity';
-import { generarPromptAnalisisClinico } from '../templates/analisis-clinico.template';
-
-@Injectable()
-export class GeminiProvider {
-  private genAI: GoogleGenerativeAI;
-
-  constructor(private configService: ConfigService) {
-    this.genAI = new GoogleGenerativeAI(
-      this.configService.get<string>('GEMINI_API_KEY')
-    );
-  }
-
-  async generarAnalisis(
-    cuestionario: Cuestionario,
-    cuestionarioAnterior?: Cuestionario
-  ): Promise<string> {
-    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-    const prompt = generarPromptAnalisisClinico(cuestionario, cuestionarioAnterior);
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-  }
-}
-```
-
-### Template de Análisis Clínico
-
-```typescript
-// src/ia/templates/analisis-clinico.template.ts
-import { Cuestionario } from '../../cuestionarios/entities/cuestionario.entity';
-
-export function generarPromptAnalisisClinico(
-  cuestionario: Cuestionario,
-  cuestionarioAnterior?: Cuestionario
-): string {
-  const datosActuales = {
-    puntajeTotal: cuestionario.puntajeTotal,
-    tipo: cuestionario.tipo,
-    fecha: cuestionario.fecha,
-    respuestas: cuestionario.respuestas.map(r => ({
-      region: r.nombreRegion,
-      severidad: r.severidad,
-      duracion: r.duracion,
-      total: r.total,
-      notas: r.notas
-    }))
-  };
-
-  const datosAnteriores = cuestionarioAnterior ? {
-    puntajeTotal: cuestionarioAnterior.puntajeTotal,
-    fecha: cuestionarioAnterior.fecha,
-    respuestas: cuestionarioAnterior.respuestas.map(r => ({
-      region: r.nombreRegion,
-      total: r.total
-    }))
-  } : null;
-
-  return `
-Eres un neurólogo especialista en Trastornos del Movimiento Funcional (TNF). 
-Genera un análisis clínico profesional basado en la siguiente evaluación S-FMDRS:
-
-## EVALUACIÓN ACTUAL
-- Fecha: ${new Date(datosActuales.fecha).toLocaleDateString()}
-- Tipo: ${datosActuales.tipo}
-- Puntaje Total: ${datosActuales.puntajeTotal}/54 puntos
-- Categoría de Severidad: ${getSeveridadCategoria(datosActuales.puntajeTotal)}
-
-### Desglose por Regiones:
-${datosActuales.respuestas.map(r => `
-- **${r.region}**: ${r.total} puntos (Severidad: ${r.severidad}, Duración: ${r.duracion})
-  ${r.notas ? `Notas: ${r.notas}` : ''}
-`).join('\n')}
-
-${datosAnteriores ? `
-## EVALUACIÓN ANTERIOR (Comparación)
-- Fecha: ${new Date(datosAnteriores.fecha).toLocaleDateString()}
-- Puntaje Total: ${datosAnteriores.puntajeTotal}/54 puntos
-- Diferencia: ${datosActuales.puntajeTotal - datosAnteriores.puntajeTotal} puntos (${calcularPorcentajeCambio(datosAnteriores.puntajeTotal, datosActuales.puntajeTotal)}%)
-
-### Cambios por Región:
-${datosActuales.respuestas.map((r, i) => {
-  const anterior = datosAnteriores.respuestas.find(ra => ra.region === r.region);
-  if (!anterior) return '';
-  const cambio = r.total - anterior.total;
-  const simbolo = cambio > 0 ? '⬆️' : cambio < 0 ? '⬇️' : '➡️';
-  return `- ${r.region}: ${anterior.total} → ${r.total} pts ${simbolo} (${cambio >= 0 ? '+' : ''}${cambio})`;
-}).join('\n')}
-` : ''}
-
-## INSTRUCCIONES
-Genera un análisis clínico completo que incluya:
-
-1. **Resumen Ejecutivo**: Breve overview del estado del paciente
-2. **Hallazgos Principales**: Top 3 regiones más afectadas con interpretación clínica
-3. **Patrones Observados**: Distribución de síntomas, lateralidad, fenómenos especiales
-4. **${datosAnteriores ? 'Evolución' : 'Baseline'}**: ${datosAnteriores ? 'Análisis de cambios y progreso' : 'Establecimiento de línea base'}
-5. **Recomendaciones**: 3-4 recomendaciones terapéuticas específicas
-6. **Próximos Pasos**: Seguimiento sugerido y consideraciones
-
-Usa formato Markdown con headers (##, ###), listas, y énfasis donde apropiado.
-Mantén un tono profesional, clínico y constructivo.
-Evita diagnósticos médicos absolutos, usa lenguaje probabilístico cuando sea apropiado.
-
-NOTA IMPORTANTE: Finaliza con un disclaimer: "*Este análisis es generado por IA y debe ser revisado y validado por el médico tratante.*"
-`;
-}
-
-function getSeveridadCategoria(puntaje: number): string {
-  const porcentaje = (puntaje / 54) * 100;
-  if (porcentaje <= 33) return 'LEVE (0-18 puntos)';
-  if (porcentaje <= 66) return 'MODERADO (19-36 puntos)';
-  return 'SEVERO (37-54 puntos)';
-}
-
-function calcularPorcentajeCambio(anterior: number, actual: number): string {
-  const cambio = ((actual - anterior) / anterior) * 100;
-  return cambio >= 0 ? `+${cambio.toFixed(1)}` : cambio.toFixed(1);
-}
-```
-
----
-
-## SERVICIO DE EMAIL
-
-```typescript
-// src/email/email.service.ts
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-
-@Injectable()
-export class EmailService {
-  private transporter: nodemailer.Transporter;
-
-  constructor(private configService: ConfigService) {
-    this.transporter = nodemailer.createTransporter({
-      host: this.configService.get<string>('SMTP_HOST'),
-      port: this.configService.get<number>('SMTP_PORT'),
-      secure: false,
-      auth: {
-        user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASS'),
-      },
-    });
-  }
-
-  async enviarCredencialesNuevoUsuario(
-    email: string,
-    nombre: string,
-    password: string,
-    rol: string
-  ): Promise<void> {
-    const mailOptions = {
-      from: this.configService.get<string>('SMTP_FROM'),
-      to: email,
-      subject: `Bienvenido al Sistema S-FMDRS - Credenciales de Acceso`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #0066CC; color: white; padding: 20px; text-align: center; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 8px; margin-top: 20px; }
-            .credentials { background: white; padding: 20px; border-left: 4px solid #0066CC; margin: 20px 0; }
-            .credential-item { margin: 10px 0; }
-            .credential-label { font-weight: bold; color: #0066CC; }
-            .credential-value { font-family: monospace; font-size: 16px; padding: 5px 10px; background: #f0f0f0; border-radius: 4px; }
-            .footer { text-align: center; margin-top: 30px; font-size: 12px; color: #666; }
-            .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🏥 Sistema S-FMDRS</h1>
-              <p>Evaluación de Trastornos del Movimiento Funcional</p>
-            </div>
-            
-            <div class="content">
-              <h2>¡Bienvenido, ${nombre}!</h2>
-              <p>Se ha creado una cuenta para usted en el Sistema S-FMDRS con el rol de <strong>${rol}</strong>.</p>
-              
-              <div class="credentials">
-                <h3>Sus Credenciales de Acceso</h3>
-                <div class="credential-item">
-                  <span class="credential-label">Email:</span><br>
-                  <span class="credential-value">${email}</span>
-                </div>
-                <div class="credential-item">
-                  <span class="credential-label">Contraseña Temporal:</span><br>
-                  <span class="credential-value">${password}</span>
-                </div>
-              </div>
-              
-              <div class="warning">
-                <strong>⚠️ Importante:</strong>
-                <ul>
-                  <li>Esta contraseña es temporal</li>
-                  <li>Se recomienda cambiarla después del primer inicio de sesión</li>
-                  <li>No comparta esta información con nadie</li>
-                </ul>
-              </div>
-              
-              <p>Para acceder al sistema, use las credenciales proporcionadas en la aplicación móvil S-FMDRS.</p>
-              
-              <p>Si tiene alguna pregunta o problema, contacte al administrador del sistema.</p>
-            </div>
-            
-            <div class="footer">
-              <p>Este es un correo automático, por favor no responda.</p>
-              <p>&copy; 2024 Sistema S-FMDRS. Todos los derechos reservados.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `
-    };
-
-    await this.transporter.sendMail(mailOptions);
-  }
-
-  async enviarNotificacionNuevoTratamiento(
-    emailPaciente: string,
-    nombrePaciente: string,
-    nombreMedico: string,
-    nombreTratamiento: string
-  ): Promise<void> {
-    // Similar estructura HTML para notificar al paciente
-    // ... implementar según necesidad
-  }
-}
-```
-
----
-
-## COMANDOS DOCKER
-
-### Construir y levantar servicios
-```bash
-# Construir imágenes
-docker-compose build
-
-# Levantar todos los servicios
-docker-compose up -d
-
-# Ver logs
-docker-compose logs -f backend
-
-# Ver logs de base de datos
-docker-compose logs -f postgres
-
-# Detener servicios
-docker-compose down
-
-# Detener y eliminar volúmenes (⚠️ elimina datos)
-docker-compose down -v
-```
-
-### Comandos útiles de desarrollo
-```bash
-# Ejecutar migraciones
-docker-compose exec backend npm run migration:run
-
-# Rollback de migraciones
-docker-compose exec backend npm run migration:revert
-
-# Seed de datos
-docker-compose exec backend npm run seed
-
-# Acceder a PostgreSQL
-docker-compose exec postgres psql -U postgres -d sfmdrs
-
-# Backup de base de datos
-docker-compose exec postgres pg_dump -U postgres sfmdrs > backup.sql
-
-# Restaurar backup
-docker-compose exec -T postgres psql -U postgres sfmdrs < backup.sql
-
-# Reiniciar solo backend
-docker-compose restart backend
-
-# Ver estado de servicios
-docker-compose ps
-```
-
----
-
-## PRUEBAS Y VALIDACIÓN
-
-### Health Check Endpoint
-
-```typescript
-// src/health/health.controller.ts
-import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { HealthCheck, HealthCheckService, TypeOrmHealthIndicator } from '@nestjs/terminus';
-
-@ApiTags('Health')
-@Controller('health')
-export class HealthController {
-  constructor(
-    private health: HealthCheckService,
-    private db: TypeOrmHealthIndicator,
-  ) {}
-
-  @Get()
-  @HealthCheck()
-  @ApiOperation({ summary: 'Check API health status' })
-  check() {
-    return this.health.check([
-      () => this.db.pingCheck('database'),
-    ]);
-  }
-}
-```
-
-### Endpoints de Prueba
-
-```bash
-# Login como administrador
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@sfmdrs.com","password":"Admin123"}'
-
-# Crear un médico
-curl -X POST http://localhost:3000/api/usuarios \
-  -H "Authorization: Bearer {token}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nombres": "Test",
-    "apellidos": "Doctor",
-    "dni": "99999999",
-    "email": "test.doctor@hospital.com",
-    "rol": "MEDICO",
-    "especialidad": "Neurología"
-  }'
-
-# Obtener todos los pacientes
-curl -X GET "http://localhost:3000/api/usuarios?rol=PACIENTE" \
-  -H "Authorization: Bearer {token}"
-```
-
----
-
-## INTEGRACIÓN CON REACT NATIVE
-
-### Ejemplo de Servicio API en React Native
-
-```typescript
-// services/api.service.ts (para React Native)
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_BASE_URL = 'http://localhost:3000/api';
-
-class ApiService {
-  private async getAuthHeader() {
-    const token = await AsyncStorage.getItem('@sfmdrs:token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
-
-  async login(email: string, password: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    
-    if (!response.ok) throw new Error('Login failed');
-    
-    const data = await response.json();
-    await AsyncStorage.setItem('@sfmdrs:token', data.access_token);
-    return data;
-  }
-
-  async crearMedico(datos: CreateMedicoDto) {
-    const response = await fetch(`${API_BASE_URL}/usuarios`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await this.getAuthHeader())
-      },
-      body: JSON.stringify({ ...datos, rol: 'MEDICO' })
-    });
-    
-    if (!response.ok) throw new Error('Error creating doctor');
-    return response.json();
-  }
-
-  async crearTratamiento(datos: CreateTratamientoDto) {
-    const response = await fetch(`${API_BASE_URL}/tratamientos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await this.getAuthHeader())
-      },
-      body: JSON.stringify(datos)
-    });
-    
-    if (!response.ok) throw new Error('Error creating treatment');
-    return response.json();
-  }
-
-  async guardarCuestionario(datos: CreateCuestionarioDto) {
-    const response = await fetch(`${API_BASE_URL}/cuestionarios`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await this.getAuthHeader())
-      },
-      body: JSON.stringify(datos)
-    });
-    
-    if (!response.ok) throw new Error('Error saving questionnaire');
-    return response.json();
-  }
-
-  async generarAnalisisIA(cuestionarioId: string, modelo: 'claude' | 'gemini') {
-    const response = await fetch(
-      `${API_BASE_URL}/cuestionarios/${cuestionarioId}/analisis-ia`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(await this.getAuthHeader())
-        },
-        body: JSON.stringify({ modelo })
-      }
-    );
-    
-    if (!response.ok) throw new Error('Error generating AI analysis');
-    return response.json();
-  }
-}
-
-export default new ApiService();
-```
-
----
-
-## SEGURIDAD
-
-### Configuraciones de Seguridad
-
-```typescript
-// src/main.ts
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import helmet from 'helmet';
-import * as compression from 'compression';
-import rateLimit from 'express-rate-limit';
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  // Security headers
-  app.use(helmet());
-  
-  // CORS
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
-    credentials: true
-  });
-  
-  // Compression
-  app.use(compression());
-  
-  // Rate limiting
-  app.use(
-    rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100 // limit each IP to 100 requests per windowMs
-    })
-  );
-  
-  // Global validation pipe
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true
-  }));
-  
-  // API prefix
-  app.setGlobalPrefix('api');
-  
-  // Swagger documentation
-  const config = new DocumentBuilder()
-    .setTitle('S-FMDRS API')
-    .setDescription('API para Sistema de Evaluación S-FMDRS')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-  
-  await app.listen(process.env.PORT || 3000);
-}
-
-bootstrap();
-```
-
----
 
 ## PRIORIDADES DE IMPLEMENTACIÓN
 
@@ -1615,12 +717,10 @@ bootstrap();
 2. ✅ Esquema de base de datos completo
 3. ✅ Sistema de autenticación JWT
 4. ✅ Módulo de usuarios (CRUD)
-5. ✅ Seeds con datos de prueba (admin + médicos + pacientes)
 
 ### FASE 2 (Esencial)
 6. ✅ Módulo de tratamientos
 7. ✅ Módulo de cuestionarios (completo con 9 regiones)
-8. ✅ Integración con APIs de IA (Claude + Gemini)
 9. ✅ Sistema de permisos por rol (Guards)
 10. ✅ Servicio de email
 
@@ -1628,15 +728,10 @@ bootstrap();
 11. ✅ Módulo de analytics (KPIs médicos)
 12. ✅ Endpoints de progreso del paciente
 13. ✅ Sistema de comentarios médico
-14. ✅ Validaciones y error handling robusto
-15. ✅ Documentación Swagger completa
+14. ✅ Validaciones
 
 ### FASE 4 (Complementaria)
-16. Testing (unit + integration)
 17. Logs estructurados
-18. Optimización de queries
-19. Caché con Redis (opcional)
-20. CI/CD pipeline
 
 ---
 
@@ -1645,11 +740,7 @@ bootstrap();
 Backend profesional, dockerizado, seguro y escalable que:
 - ✅ Gestiona 3 roles de usuario con permisos diferenciados
 - ✅ Persiste todos los datos en PostgreSQL
-- ✅ Integra Claude y Gemini para análisis clínico automatizado
 - ✅ Envía emails con credenciales a nuevos usuarios
-- ✅ Proporciona APIs RESTful documentadas con Swagger
 - ✅ Soporta toda la lógica de negocio del sistema S-FMDRS
-- ✅ Se conecta seamlessly con la aplicación React Native
-- ✅ Incluye datos de prueba para demostración inmediata
 
-**IMPORTANTE**: Este backend debe reemplazar completamente los datos mock de RapidNative y proporcionar toda la funcionalidad real del sistema.
+**IMPORTANTE**: Este backend debe reemplazar completamente los datos mock de Cursor y proporcionar toda la funcionalidad real del sistema.
