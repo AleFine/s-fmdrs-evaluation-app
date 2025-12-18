@@ -5,3 +5,6 @@
 [submodule "app-frontend"]
 	path = app-frontend
 	url = https://github.com/AleFine/app-frontend
+[submodule "app-frontend-web"]
+	path = app-frontend-web
+	url = https://github.com/KelitaMau/app-frontend-web.git
