@@ -14,9 +14,6 @@ Implementar el backend completo para el sistema S-FMDRS (Simplified Functional M
 - **Validación**: class-validator + class-transformer
 - **Contenedorización**: Docker + Docker Compose
 - **Variables de Entorno**: dotenv
-- **Integración IA**: 
-  - Anthropic API (Claude)
-  - Google Generative AI (Gemini)
 
 ### Arquitectura
 ```
@@ -560,13 +557,9 @@ COPY --from=builder /app/dist ./dist
 
 # Variables de entorno por defecto
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=4000
 
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+EXPOSE 4000
 
 # Comando de inicio
 CMD ["node", "dist/main"]
@@ -590,7 +583,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
@@ -626,7 +619,7 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-4000}:4000"
     networks:
       - sfmdrs-network
     volumes:
@@ -665,7 +658,7 @@ networks:
 
 # Application
 NODE_ENV=development
-PORT=3000
+PORT=4000
 API_PREFIX=api
 
 # Database
